@@ -3,8 +3,8 @@ import argparse
 import logging
 from glob import glob
 
-def write_genome_file(filepath, genome_dir, N = None):
-	fna_files = glob(os.path.join(genome_dir,'*.fna'))
+def write_genome_file(filepath, genome_dir, N = None, suffix='fna'):
+	fna_files = glob(os.path.join(genome_dir,f'*.{suffix}'))
 	if N is not None:
 		fna_files = fna_files[:N]
 	with open(filepath,'w+') as fid:
@@ -14,6 +14,7 @@ def write_genome_file(filepath, genome_dir, N = None):
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--genome_dir', type=str, help='The path of directory with all FNA files', default='./files/organism_files')
+	parser.add_argument('--suffix', type=str, help='The suffix of FNA files', default='fna')
 	parser.add_argument('--out_file', type=str, help='The path of directory with all FNA files', default='./files/genome_file.txt')
 	args = parser.parse_args()
 
@@ -29,5 +30,5 @@ if __name__ == "__main__":
 
 	## write a genome file for downstream analysis
 	logging.info(f"Writing a genome file to {out_file}.")
-	write_genome_file(out_file, genome_dirname)
+	write_genome_file(out_file, genome_dirname, suffix=args.suffix)
 

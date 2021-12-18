@@ -19,7 +19,8 @@ class get_mutated_seq_and_kmers():
 		self.mut_kmer_ct, self.n_kmers_in_seqs = utils.count_from_seqs(self.k,kmer_to_idx,self.mutated_seqs)
 
 	def mutate_fasta_seqs(self):
-		return list(map(self.get_mutated_seq, self.raw_seqs))
+		# return map(self.get_mutated_seq, self.raw_seqs)
+		return [self.get_mutated_seq(seq) for seq in self.raw_seqs]
 
 	def get_mutated_seq(self, seq):
 		L = len(seq)

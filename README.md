@@ -2,5 +2,10 @@
 This repo is for an optimized version of https://github.com/sew347/Estimating_Unknown
 
 # How to run scripts
-1. Go to ./scripts folder and run `sh compile.sh`
-2. Go back to ../ folder and follow the `main.sh` to run experiment
+```
+bash main.sh
+```
+
+# Figure below shows the running time improvement compared with the original version
+
+![comparison](https://user-images.githubusercontent.com/20031672/146629252-7baa1f4c-46df-4b3a-820f-6dd8339f935d.png)

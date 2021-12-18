@@ -3,11 +3,6 @@
 ## set working directory
 work_folder=$(pwd)
 
-# complie the cython extension scripts
-cd ${work_folder}/scripts
-bash ./compile.sh
-cd ${work_folder}
-
 ## create a text file with names of all FNA files from a directory for easy use with MinHash
 python ./scripts/write_genome_file.py --genome_dir ${work_folder}/files/organism_files_10kplus --out_file ${work_folder}/files/genome_file_10kplus.txt --suffix "fna.gz"
 

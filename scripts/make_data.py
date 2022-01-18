@@ -77,33 +77,37 @@ class get_mutated_data():
 	'''
 	This class is to randomly mutate the original genomes and generate aggregated kmer frequency vector
 	'''
-	def __init__(self, orig_A_matrix, abundance_list, mut_rate_list, total_kmers = pow(10,9), rnd = True):
+	def __init__(self, orig_A_matrix, abundance_list, mut_rate_list, total_kmers = None, rnd = True):
 		self.orig_A_matrix = orig_A_matrix
 		self.fasta_files = orig_A_matrix.fasta_files
 		self.kmer_to_idx = orig_A_matrix.kmer_to_idx
 		self.mut_kmer_ct = np.zeros(len(self.kmer_to_idx))
 		self.abundance_list = abundance_list
 		self.mut_rate_list = mut_rate_list
-		self.total_kmers = total_kmers
 		self.rnd = rnd
+		self.N = len(self.fasta_files)
+		if total_kmers is None:
+			#scale total kmers for number of organisms--needs fine-tuning        
+			self.total_kmers = self.N*pow(10,8)
+		else:
+			self.total_kmers = total_kmers
 		self.mut_orgs = []
 
 		self.get_all_mutated_organism()
 
 	def get_all_mutated_organism(self):
-
-		N = len(self.fasta_files)
 		max_available_cpu = int(cpu_count()*(2/3))
-		if N < max_available_cpu:
-			n_processes = N
+		if self.N < max_available_cpu:
+			n_processes = self.N
 		else:
 			n_processes = max_available_cpu
-		params = zip(self.fasta_files, [self.total_kmers]*N, self.mut_rate_list, self.abundance_list, [self.kmer_to_idx]*N)
+		params = zip(self.fasta_files, [self.total_kmers]*self.N, self.mut_rate_list, self.abundance_list, [self.kmer_to_idx]*self.N)
 		with Pool(processes=n_processes) as excutator:
 			res = list(excutator.map(self.get_single_mutated_organism, params))
 		self.mut_orgs += [curr_mut_org for (curr_mut_org, _) in res]
 		self.mut_kmer_ct += np.sum(np.vstack([mut_kmer_ct for (_, mut_kmer_ct) in res]), axis=0)
 
+        #this line is a problem
 		if self.rnd:
 			self.mut_kmer_ct = np.round(self.mut_kmer_ct)
 

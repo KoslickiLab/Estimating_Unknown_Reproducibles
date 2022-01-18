@@ -15,7 +15,7 @@ class frequency_estimator():
 		self.freq_est = self.LPS.x_opt/self.mut_organisms.total_kmers
 		self.est_unk_pct = np.sum(self.freq_est)
 
-	def estimate_w(self,est_n_orgs = 1000, p_val = 0.95, n_tests = 10000):
+	def estimate_w(self,est_n_orgs = 1000, p_val = 0.99, n_tests = 10000):
 		prob = (1-self.mut_thresh)**self.k
 		b = []
 		for i in range(n_tests):

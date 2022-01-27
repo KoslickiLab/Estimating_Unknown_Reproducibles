@@ -2,10 +2,15 @@ import os
 import numpy as np
 import make_data
 import freq_est_from_mut as ferm
+import est_eval as ee
 import argparse
 import logging
 import pandas as pd
 import MinHash as mh
+
+#######################
+#DEPRECATED: SW TO FIX#
+#######################
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="This script runs random tests on a given organism dictionary.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -17,7 +22,7 @@ if __name__ == "__main__":
 	parser.add_argument('--unif_param', help='If set --set_auto, then this parameter is used as the parameters of uniform distribution to generate mutation rate', default=[0.01, 0.07], type = float, nargs = '+')
 	parser.add_argument('--weight', help='False negative discount weight', default=None, type = float)
 	parser.add_argument('--seed', help='Random seed', default=None, type = int)
-	parser.add_argument('--output_dir', help='Random seed', default='../results', type = str)
+	parser.add_argument('--output_dir', help='Output directory', default='../results', type = str)
 	args = parser.parse_args()
 
 	## set up basic log information
@@ -39,23 +44,27 @@ if __name__ == "__main__":
 			exit(0)
 		else:
 			if args.N == -1:
-				logging.info(f"The paramter 'N' is set to -1. So use all {len(args.metadata.file_names)} genomes.")
+				logging.info(f"The parameter 'N' is set to -1. So use all {len(args.metadata.file_names)} genomes.")
 				N = len(args.metadata.file_names)
 			elif args.N > len(args.metadata.file_names):
-				logging.warning(f"The paramter 'N' is set larger than the total numbers of genomes {len(args.metadata.file_names)}. So set it to {len(args.metadata.file_names)}.")
+				logging.warning(f"The parameter 'N' is set larger than the total numbers of genomes {len(args.metadata.file_names)}. So set it to {len(args.metadata.file_names)}.")
 				N = len(args.metadata.file_names)
 			else:
 				N = args.N
 			args.abundance_list = list(np.random.dirichlet(np.ones(N),size=1).reshape(-1))
+			logging.info('Abundance list computed:')
+			logging.info(np.round(args.abundance_list))
 			if len(args.unif_param) != 2:
-				logging.error("The paramter 'unif_param' has the number of values which is not equal to 2")
+				logging.error("The parameter 'unif_param' has the number of values which is not equal to 2")
 				exit(0)
 			else:
 				args.mut_rate_list = list(np.random.uniform(args.unif_param[0],args.unif_param[1],N))
+				logging.info('Mutation rates computed:')
+				logging.info(args.mut_rate_list)
 	else:
 		N = len(args.abundance_list)
 		if args.N > len(args.metadata.file_names):
-			logging.warning(f"The paramter 'N' is set larger than the total numbers of genomes {len(args.metadata.file_names)}. So set it to {len(args.metadata.file_names)}.")
+			logging.warning(f"The parameter 'N' is set larger than the total numbers of genomes {len(args.metadata.file_names)}. So set it to {len(args.metadata.file_names)}.")
 			N = len(args.metadata.file_names)
 		if len(args.mut_rate_list) != N:
 			logging.error("the mutation rate list and the abundance list must have the same length.")
@@ -75,11 +84,21 @@ if __name__ == "__main__":
 
 	logging.info("estimate frequency.")
 	FE = ferm.frequency_estimator(mut_organisms, w=args.weight)
-	logging.info("Recovered frequencies at " + str(0.05) + " mutation threshold:")
-	logging.info(np.round(FE.freq_est,4))
+	if N <= 100:
+		logging.info("True frequencies:")
+		logging.info(np.round(args.abundance_list,4))
+		logging.info("True mutation rates:")
+		logging.info(np.round(args.mut_rate_list,4))
+		logging.info("Recovered frequencies at " + str(0.05) + " mutation threshold:")
+		logging.info(np.round(FE.freq_est,4))
+	logging.info("Evaluating estimate:")
+	EE = ee.est_evaluator(args.abundance_list,args.mut_rate_list,0.05,FE.freq_est)
+	fp, fn = EE.classification_err()
+	max_pos_rt = EE.max_nonzero_rate()
+	logging.info("False Pos: " + str(fp) + ", False Neg: " + str(fn) + ", Max mut rate: " +str(np.round(max_pos_rt,3)))
 
 	## save results into file
 	res = pd.DataFrame(zip(orig_A_matrix.fasta_files, args.abundance_list, args.mut_rate_list, np.round(FE.freq_est,4)))
-	res.columns = ['organism_files', 'abundance', 'mutation_rate', 'estimated_freqq']
+	res.columns = ['organism_files', 'abundance', 'mutation_rate', 'estimated_freq']
 	res.to_csv(os.path.join(args.output_dir,"final_results.txt"), sep='\t', index=None)
 	logging.info('Program is finished!!!')

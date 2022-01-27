@@ -14,6 +14,9 @@ class est_evaluator:
     def min_zero_rate(self):
         zero_idx = np.nonzero(self.freq_est == 0)
         return(np.min(self.true_mut_rate[zero_idx]))
+    
+    def abs_err(self):
+        return np.sum(np.abs(self.freq_est - self.true_abundance*(self.true_mut_rate <= self.mut_thresh)))
 
     def classification_err(self):
         true_class = (self.true_mut_rate <= self.mut_thresh).astype(int)

@@ -79,15 +79,24 @@ class processed_data:
 	Inputs: get_original_data object, correlation threshold, relative maximum threshold
 	Outputs: processed_data object: similar fields to original_data but with modified dictionary, N, and filenames
 	'''
-	def __init__(self, orig_data, corr_thresh = 0.8, rel_max_thresh = 5):
+	def __init__(self, orig_data, corr_thresh = None, mut_thresh = None, rel_max_thresh = 5):
 		self.orig_data = orig_data
 		self.N_orig = self.orig_data.N
-		self.corr_thresh = corr_thresh
+		self.k = self.orig_data.k
+		self.num_hashes = self.orig_data.num_hashes
+		if corr_thresh is None and mut_thresh is None:
+			raise ValueError("Either corr_thresh or mut_thresh must be provided.")
+		if corr_thresh is not None and mut_thresh is not None:
+			raise ValueWarning("Both corr_thresh and mut_thresh provided; corr_thresh will be used.")
+			self.corr_thresh = corr_thresh
+		elif corr_thresh is not None:
+			self.corr_thresh = corr_thresh
+		else:
+			non_mut_prob = (1-mut_thresh)**self.k
+			self.corr_thresh = 2*non_mut_prob            
 		self.rel_max_thresh = rel_max_thresh
 		self.uncorr_indices = self.uncorr_idx()
 		self.N = len(self.uncorr_indices)
-		self.k = self.orig_data.k
-		self.num_hashes = self.orig_data.num_hashes
 		self.idx_to_kmer = self.orig_data.idx_to_kmer
 		self.kmer_to_idx = self.orig_data.kmer_to_idx
 		self.fasta_files = [self.orig_data.fasta_files[i] for i in self.uncorr_indices]
@@ -127,6 +136,12 @@ class processed_data:
 			total_i_adj = 1/m - removed
 			flat_dict[:,i] = flat_dict[:,i]*total_i/total_i_adj
 		return flat_dict
+    
+	def process_abund_and_mut(self, abundance_list, mut_rate_list):
+		proc_abundance = [abundance_list[i] for i in self.uncorr_indices]
+		proc_abundance = proc_abundance/np.sum(proc_abundance)
+		proc_mut_rate_list = [mut_rate_list[i] for i in self.uncorr_indices]
+		return proc_abundance, proc_mut_rate_list
                     
                 
 #inputs: proc_data object, sample abundance (list), sample mutation rates (list)

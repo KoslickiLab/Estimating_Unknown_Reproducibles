@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     with open(abs_filepath, 'w') as f:
         writer = csv.writer(f)
-        row = ['False positives', 'False negatives', 'Max positive rate', 'Min zero rate', 'Absolute error', 'True unknown percent', 'Est unknown pct', 'True unknown minus est unknown']
+        row = ['False positives', 'False negatives', 'Max positive rate', 'Min zero rate', 'Absolute error', 'True unknown percent', 'Est unknown pct', 'True unknown minus est unknown','simulation_time','algo_time']
         writer.writerow(row)
 
         logging.info('Beginning test suite with random seed %(seed)d.' % {"seed": seed})
@@ -86,13 +86,13 @@ if __name__ == "__main__":
             N=N, filepath = output_dir)
         logging.info('Preprocessing dictionary.')
         proc_data = make_data.processed_data(orig_data, mut_thresh = mut_thresh)
+        s = ceil(alpha*proc_data.N)
 
         logging.info('Beginning test loop.')
+        logging.info('Abundance is automatically set according to dirichlet distribution.')
+        logging.info('Mutation rates automatically set according to uniform distribution between %(lower)2f and %(upper)2f.' %{'lower': unif_param[0], 'upper': unif_param[1]})
         for t in range(T):
-            s = ceil(alpha*proc_data.N)
-            if t == 0:
-                logging.info('Abundance is automatically set according to dirichlet distribution.')
-                logging.info('Mutation rates automatically set according to uniform distribution between %(lower)2f and %(upper)2f.' %{'lower': unif_param[0], 'upper': unif_param[1]})
+            sim_start = time.time()
             support_abundance = list(np.random.dirichlet(np.ones(s),size=1).reshape(-1))
             support_mut = list(np.random.uniform(unif_param[0],unif_param[1],s))
             support = random.sample(list(range(proc_data.N)),s)
@@ -104,13 +104,18 @@ if __name__ == "__main__":
 
             logging.info('Generating mutated data for iteration %(t)d.' % {'t': t+1})
             mut_organisms = make_data.get_mutated_data(proc_data, proc_abundance, proc_mut_rate_list)
-
+            sim_end = time.time()
+            sim_time = sim_end - sim_start
+            
             logging.info('Estimating Frequencies for iteration %(t)d.' % {'t': t+1})
             FE = ferm.frequency_estimator(mut_organisms, w=weight)
 
             logging.info('Evaluating performance for iteration %(t)d.' % {'t': t+1})
 
             EE = ee.est_evaluator(proc_abundance,proc_mut_rate_list,mut_thresh,FE.freq_est)
+            algo_end = time.time()
+            algo_time = algo_end - sim_end
+            
             fp, fn, rfp, rfn = EE.classification_err()
             num_fp = np.sum(fp)
             num_fn = np.sum(fn)
@@ -118,7 +123,7 @@ if __name__ == "__main__":
             min_zero_rt = EE.min_zero_rate()
 
             logging.info('Saving results for iteration.')
-            row = [num_fp, num_fn, max_pos_rt, min_zero_rt, EE.abs_err(), round(EE.unknown_pct(),6), EE.unknown_pct_est(), EE.unknown_pct()-EE.unknown_pct_est()]
+            row = [num_fp, num_fn, max_pos_rt, min_zero_rt, EE.abs_err(), round(EE.unknown_pct(),6), EE.unknown_pct_est(), EE.unknown_pct()-EE.unknown_pct_est(), sim_time, algo_time]
             writer.writerow(row)
 
             logging.info('Test iteration %(t)d complete.' % {'t': t+1})

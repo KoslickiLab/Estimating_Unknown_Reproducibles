@@ -30,7 +30,6 @@ class mutated_fasta():
 		    self.mut_ct = self.mut_ct + self.total_kmers*rel_abundance[file_idx]*indiv_ct[file_idx];
 		if rnd:
 			mut_ct = np.round(mut_ct)
-
 			self.mut_ct = mut_ct
 			self.indiv_ct = indiv_ct
 			self.mut_seqs = mut_seqs
@@ -38,13 +37,14 @@ class mutated_fasta():
 	def get_mutated_seq(seq, r1):
 		L = len(seq)
 		mut_seq_list = list(seq)
-		mut_flag = np.random.binomial(1,r1,L)
-		mut_indices = np.nonzero(mut_flag)
-		mut_indices = mut_indices[0]
-		nucleotides = {'A','C','G','T'}
-		for mut_idx in mut_indices:
-			possible_muts = list(nucleotides.difference({seq[mut_idx]}))
-			mut_seq_list[mut_idx] = np.random.choice(possible_muts)
+		if r1 > 0:
+			mut_flag = np.random.binomial(1,r1,L)
+			mut_indices = np.nonzero(mut_flag)
+			mut_indices = mut_indices[0]
+			nucleotides = {'A','C','G','T'}
+			for mut_idx in mut_indices:
+				possible_muts = list(nucleotides.difference({seq[mut_idx]}))
+				mut_seq_list[mut_idx] = np.random.choice(possible_muts)        
 		mut_seq = ""
 		mut_seq = mut_seq.join(mut_seq_list)
 		return mut_seq

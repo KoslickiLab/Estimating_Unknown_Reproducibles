@@ -5,6 +5,7 @@ from functools import reduce
 import operator
 import gzip
 import pathlib
+from collections import Counter
 # import exec_ext_files.optimized_functions as op_funcs
 
 def extract_ATCG_seq_from_genome(bio_seqio_iter):
@@ -26,7 +27,7 @@ def fasta_to_ATCG_seq_list(fasta_file):
 def get_kmer_count(k, kmer_to_idx, seq):
 	L = len(seq);
 	n_unique_kmers = len(kmer_to_idx)
-	## use a triky skill to count total kmers (store the total kmers of this sequence in the last position of the count array)
+	## use a tricky skill to count total kmers (store the total kmers of this sequence in the last position of the count array)
 	n_kmers_in_seq = L-k+1
 	count = np.zeros(n_unique_kmers+1)
 	count[-1] = n_kmers_in_seq
@@ -45,3 +46,25 @@ def count_from_seqs(k, kmer_to_idx, seqs):
 	count = temp_count[:-1]
 	count = count/n_kmers_in_seqs
 	return [count, n_kmers_in_seqs]
+
+def sparse_get_kmer_count(k, kmer_to_idx, seq):
+	L = len(seq);
+	n_unique_kmers = len(kmer_to_idx)
+	indices = []
+	for i in range(L-k+1):
+		kmer = seq[i:(i+k)]
+		if kmer in kmer_to_idx:
+			indices.append(kmer_to_idx[kmer])
+	return indices
+
+def sparse_count_from_seqs(k, kmer_to_idx, seqs):
+	n_unique_kmers = len(kmer_to_idx)
+	counted_indices = []
+	n_kmers_in_seqs = 0
+	for seq in seqs:
+		n_kmers_in_seqs += len(seq) - k + 1
+		counted_indices = counted_indices + sparse_get_kmer_count(k, kmer_to_idx, seq)
+	idx_counter = Counter(counted_indices)
+	indices = list(idx_counter.keys())
+	counts = [c/n_kmers_in_seqs for c in list(idx_counter.values())]
+	return counts, indices

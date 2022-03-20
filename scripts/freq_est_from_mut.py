@@ -10,7 +10,7 @@ class frequency_estimator():
 		self.num_hashes = self.mut_organisms.orig_A_matrix.num_hashes
 		self.mut_thresh = mut_thresh
 		self.w = w if w is not None else self.estimate_w()
-		self.LPS = lps.lp_solver(self.mut_organisms.orig_A_matrix.dictionary, self.mut_organisms.mut_kmer_ct, self.w, run_now = True)
+		self.LPS = lps.lp_solver(self.mut_organisms.orig_A_matrix.dictionary, self.mut_organisms.mut_kmer_ct, self.w, self.mut_organisms.N, run_now = True)
 		self.count_est = self.LPS.x_opt
 		self.freq_est = self.LPS.x_opt/self.mut_organisms.total_kmers
 		self.est_unk_pct = np.sum(self.freq_est)

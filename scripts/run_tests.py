@@ -16,6 +16,7 @@ from math import ceil
 from scipy.stats import binom
 import csv
 from datetime import datetime
+import pickle
 import pathlib
 warnings.filterwarnings("ignore")
 
@@ -34,11 +35,14 @@ if __name__ == "__main__":
     parser.add_argument('--seed', help='Random seed', default=None, type = int)
     parser.add_argument('--output_dir', help='Output directory', default='../results', type = str)
     parser.add_argument('--T', help='Number of tests', default=1, type = int)
+    parser.add_argument('--nosparse', help='Set to use dense matrices instead of sparse', action='store_false')
+    parser.add_argument('--nosave', help='Results will not be saved if set.', action='store_false')
     args = parser.parse_args()
-
+    
     k = args.k
     n = args.n
     N = args.N
+    
     if args.db_file is None:
         db_file = '../files/database_test/cdb_n'+str(n)+'_k'+str(k)+'/cdb.h5'
     unif_param = args.unif_param
@@ -46,6 +50,8 @@ if __name__ == "__main__":
     mut_thresh = args.mut_thresh
     alpha = args.alpha
     seed = args.seed
+    sparse = args.nosparse
+    save = args.nosave
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
@@ -58,74 +64,94 @@ if __name__ == "__main__":
     result_path = '../results/test_results_%(ts)s' % {'ts': date_time}
     abs_path = os.path.abspath(result_path)
     #create path if doesn't exist
-    pathlib.Path(result_path).mkdir(parents=True, exist_ok=True)
-    abs_filepath = result_path + '/results.csv'
-    
-    #todo: log arguments
-    arg_filepath = result_path + '/args.csv'
-    with open(arg_filepath, 'w') as args_f:
-        writer = csv.writer(args_f)
-        headers = ['k','n','N','db_file','unif_param','weight','mut_thresh','alpha','seed','output_dir','T']
-        row = [k,n,N,db_file,unif_param,weight,mut_thresh,alpha,seed,output_dir,T]
-        writer.writerow(headers)
-        writer.writerow(row)
-
+    if save:
+        pathlib.Path(result_path).mkdir(parents=True, exist_ok=True)
+        abs_filepath = result_path + '/results.csv'
+        arg_filepath = result_path + '/args.csv'
+        
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(filename)s - %(levelname)s - %(message)s')
-    logging.info('Program started. Recording results in folder %(abs_filepath)s.' % {'abs_filepath': abs_filepath})
+    if save:
+        logging.info('Program started. Recording results in folder %(abs_filepath)s.' % {'abs_filepath': abs_filepath})
+    else:
+        logging.info('Program started. Parameter --nosave set; results WILL NOT be recorded.')
 
-    with open(abs_filepath, 'w') as f:
-        writer = csv.writer(f)
-        row = ['False positives', 'False negatives', 'Max positive rate', 'Min zero rate', 'Absolute error', 'True unknown percent', 'Est unknown pct', 'True unknown minus est unknown','simulation_time','algo_time']
-        writer.writerow(row)
+    logging.info('Beginning test suite with random seed %(seed)d.' % {"seed": seed})
+    metadata = mh.get_info_from_single_hdf5(db_file)
+    
+    if N == -1:
+        logging.info(f"The parameter 'N' is set to -1. Program will use all {len(metadata.file_names)} genomes.")
+        N = len(metadata.file_names)
 
-        logging.info('Beginning test suite with random seed %(seed)d.' % {"seed": seed})
-        metadata = mh.get_info_from_single_hdf5(db_file)
-
-        logging.info('Compiling original dictionary.')
-        orig_data = make_data.get_original_data(db_file = db_file, file_names = metadata.file_names, \
-            N=N, filepath = output_dir)
-        logging.info('Preprocessing dictionary.')
-        proc_data = make_data.processed_data(orig_data, mut_thresh = mut_thresh)
-        s = ceil(alpha*proc_data.N)
-
-        logging.info('Beginning test loop.')
-        logging.info('Abundance is automatically set according to dirichlet distribution.')
-        logging.info('Mutation rates automatically set according to uniform distribution between %(lower)2f and %(upper)2f.' %{'lower': unif_param[0], 'upper': unif_param[1]})
-        for t in range(T):
-            sim_start = time.time()
-            support_abundance = list(np.random.dirichlet(np.ones(s),size=1).reshape(-1))
-            support_mut = list(np.random.uniform(unif_param[0],unif_param[1],s))
-            support = random.sample(list(range(proc_data.N)),s)
-            proc_abundance = [0]*proc_data.N
-            proc_mut_rate_list = [0]*proc_data.N
-            for i in range(s):
-                proc_abundance[support[i]] = support_abundance[i]
-                proc_mut_rate_list[support[i]] = support_mut[i]
-
-            logging.info('Generating mutated data for iteration %(t)d.' % {'t': t+1})
-            mut_organisms = make_data.get_mutated_data(proc_data, proc_abundance, proc_mut_rate_list)
-            sim_end = time.time()
-            sim_time = sim_end - sim_start
-            
-            logging.info('Estimating Frequencies for iteration %(t)d.' % {'t': t+1})
-            FE = ferm.frequency_estimator(mut_organisms, w=weight)
-
-            logging.info('Evaluating performance for iteration %(t)d.' % {'t': t+1})
-
-            EE = ee.est_evaluator(proc_abundance,proc_mut_rate_list,mut_thresh,FE.freq_est)
-            algo_end = time.time()
-            algo_time = algo_end - sim_end
-            
-            fp, fn, rfp, rfn = EE.classification_err()
-            num_fp = np.sum(fp)
-            num_fn = np.sum(fn)
-            max_pos_rt = EE.max_nonzero_rate()
-            min_zero_rt = EE.min_zero_rate()
-
-            logging.info('Saving results for iteration.')
-            row = [num_fp, num_fn, max_pos_rt, min_zero_rt, EE.abs_err(), round(EE.unknown_pct(),6), EE.unknown_pct_est(), EE.unknown_pct()-EE.unknown_pct_est(), sim_time, algo_time]
+    logging.info('Compiling original dictionary.')
+    orig_data = make_data.get_original_data(db_file = db_file, file_names = metadata.file_names, \
+    N=N, sparse_flag = sparse, filepath = output_dir)
+    logging.info('Dictionary generated with type %(dict_type)s' % {"dict_type": type(orig_data.dictionary)})
+    proc_data = make_data.processed_data(orig_data, mut_thresh = mut_thresh)
+    
+    logging.info('Preprocessing dictionary.')
+    s = ceil(alpha*proc_data.N)
+    if save:
+        with open(arg_filepath, 'w') as args_f:
+            writer = csv.writer(args_f)
+            headers = ['k','n','s','raw_N','proc_N','db_file','unif_param','weight','mut_thresh','alpha','seed','output_dir','T']
+            row = [k,n,s, N,proc_data.N, db_file,unif_param,weight,mut_thresh,alpha,seed,output_dir,T]
+            writer.writerow(headers)
             writer.writerow(row)
 
-            logging.info('Test iteration %(t)d complete.' % {'t': t+1})
+    logging.info('Beginning test loop.')
+    logging.info('Abundance is automatically set according to dirichlet distribution.')
+    logging.info('Mutation rates automatically set according to uniform distribution between %(lower)2f and %(upper)2f.' %{'lower': unif_param[0], 'upper': unif_param[1]})
+    if save:
+        with open(abs_filepath, 'w') as f:
+            writer = csv.writer(f)
+            row = ['Iteration','False positives', 'False negatives', 'Max positive rate', 'Min zero rate', 'Absolute error', 'True unknown percent', 'Est unknown pct', 'True unknown minus est unknown','simulation_time','algo_time']
+            writer.writerow(row)
+        
+    for t in range(T):
+        sim_start = time.time()
+        support_abundance = list(np.random.dirichlet(np.ones(s),size=1).reshape(-1))
+        support_mut = list(np.random.uniform(unif_param[0],unif_param[1],s))
+        support = random.sample(list(range(proc_data.N)),s)
+        proc_abundance = [0]*proc_data.N
+        proc_mut_rate_list = [0]*proc_data.N
+        for i in range(s):
+            proc_abundance[support[i]] = support_abundance[i]
+            proc_mut_rate_list[support[i]] = support_mut[i]
+            
+        data = [support, support_abundance, support_mut, proc_abundance, proc_mut_rate_list]
+        data_filepath = result_path + '/data.pkl'
+        if save:
+            with open(data_filepath, 'wb') as f:
+                pickle.dump(data, f)
+            
+
+        logging.info('Generating mutated data for iteration %(t)d.' % {'t': t+1})
+        mut_organisms = make_data.get_mutated_data(proc_data, proc_abundance, proc_mut_rate_list)
+        sim_end = time.time()
+        sim_time = sim_end - sim_start
+
+        logging.info('Estimating Frequencies for iteration %(t)d.' % {'t': t+1})
+        FE = ferm.frequency_estimator(mut_organisms, w=weight)
+
+        logging.info('Evaluating performance for iteration %(t)d.' % {'t': t+1})
+
+        EE = ee.est_evaluator(proc_abundance,proc_mut_rate_list,mut_thresh,FE.freq_est)
+        algo_end = time.time()
+        algo_time = algo_end - sim_end
+
+        fp, fn, rfp, rfn = EE.classification_err()
+        num_fp = np.sum(fp)
+        num_fn = np.sum(fn)
+        max_pos_rt = EE.max_nonzero_rate()
+        min_zero_rt = EE.min_zero_rate()
+
+        logging.info('Saving results for iteration.')
+        row = [t+1,num_fp, num_fn, max_pos_rt, min_zero_rt, EE.abs_err(), round(EE.unknown_pct(),6), EE.unknown_pct_est(), EE.unknown_pct()-EE.unknown_pct_est(), sim_time, algo_time]
+        if save:
+            with open(abs_filepath, 'a') as f:
+                writer = csv.writer(f)
+                writer.writerow(row)
+
+        logging.info('Test iteration %(t)d complete.' % {'t': t+1})
 
         logging.info('Testing complete.')

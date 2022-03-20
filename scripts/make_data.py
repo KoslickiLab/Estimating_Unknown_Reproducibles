@@ -4,15 +4,19 @@ import MinHash as mh
 import pickle
 import mutate_single_organism as mso
 import utils
+import scipy.sparse.linalg as spla
+from sklearn.preprocessing import normalize
+from scipy.sparse import csc_matrix
 from multiprocessing import Pool, cpu_count
 
 class get_original_data:
 	'''
 	This class is to take in count estimator(genome sketch) file generated from CMash and creates dictionary matrix and associated metadata
 	'''
-	def __init__(self, db_file, file_names, N, filename = None, filepath = None):
+	def __init__(self, db_file, file_names, N, sparse_flag = True, filename = None, filepath = None):
 		self.file_names = file_names
 		self.N = N
+		self.sparse = sparse_flag
 		self.dict_files_from_db(db_file)
 		if filename is not None:
 			self.filename = filename
@@ -31,9 +35,29 @@ class get_original_data:
 		self.fasta_files = genome_files
 		self.idx_to_kmer = idx_to_kmer
 		self.kmer_to_idx = kmer_to_idx
-		dict_matrix = self.matrix_from_fasta_files()
-		self.dictionary = dict_matrix
+		if self.sparse:
+			self.dictionary = self.sparse_matrix_from_fasta_files()
+		else:
+			self.dictionary = self.matrix_from_fasta_files()
 
+	@staticmethod
+	def kmer_union_from_count_estimators(count_estimators):
+		idx_to_kmer = list({kmer for ce in count_estimators for kmer in ce._kmers})
+		kmer_to_idx = {kmer:idx for idx, kmer in enumerate(idx_to_kmer)}
+		return [idx_to_kmer, kmer_to_idx]
+
+	def dict_filename(self,filepath, N=None):
+		if os.path.isfile(filepath):
+			dict_dir = os.path.dirname(filepath)
+		elif os.path.isdir(filepath):
+			dict_dir = filepath
+		else:
+			raise ValueError('Argument is not a file or directory.')
+		add = '_N'+str(N) if N is not None else ''
+		dict_files = os.path.join(dict_dir, 'A_matrix'+add+'.pkl')
+		return dict_files
+
+	#Dense matrix generation
 	def matrix_from_fasta_files(self):
 		max_available_cpu = int(cpu_count()*(2/3))
 		if self.N < max_available_cpu:
@@ -53,22 +77,33 @@ class get_original_data:
 		this_normalized_count, _ = utils.count_from_seqs(k, kmer_to_idx, curr_seqs)
 		return this_normalized_count
 
-	@staticmethod
-	def kmer_union_from_count_estimators(count_estimators):
-		idx_to_kmer = list({kmer for ce in count_estimators for kmer in ce._kmers})
-		kmer_to_idx = {kmer:idx for idx, kmer in enumerate(idx_to_kmer)}
-		return [idx_to_kmer, kmer_to_idx]
-
-	def dict_filename(self,filepath, N=None):
-		if os.path.isfile(filepath):
-			dict_dir = os.path.dirname(filepath)
-		elif os.path.isdir(filepath):
-			dict_dir = filepath
+	#Sparse matrix generation
+	def sparse_matrix_from_fasta_files(self):
+		max_available_cpu = int(cpu_count()*(2/3))
+		if self.N < max_available_cpu:
+			n_processes = self.N
 		else:
-			raise ValueError('Argument is not a file or directory.')
-		add = '_N'+str(N) if N is not None else ''
-		dict_files = os.path.join(dict_dir, 'A_matrix'+add+'.pkl')
-		return dict_files
+			n_processes = max_available_cpu
+		params = zip(self.fasta_files, [self.k]*self.N, [self.kmer_to_idx]*self.N)
+		with Pool(processes=n_processes) as executor:
+			res = executor.map(self.get_sparse_count_from_single_organism, params)
+		counts = []
+		row_idx = []
+		col_idx = []
+		for i in range(self.N):
+			L = len(res[i][0])
+			counts = counts + res[i][0]
+			row_idx = row_idx + res[i][1]
+			col_idx = col_idx + ([i]*L)
+		freq_matrix = csc_matrix((counts, (row_idx,col_idx)))
+		return freq_matrix
+	
+	@staticmethod
+	def get_sparse_count_from_single_organism(this_param):
+		fasta_file, k, kmer_to_idx = this_param
+		curr_seqs = utils.fasta_to_ATCG_seq_list(fasta_file)
+		this_normalized_count, indices = utils.sparse_count_from_seqs(k, kmer_to_idx, curr_seqs)
+		return this_normalized_count, indices
     
 
 class processed_data:
@@ -81,6 +116,7 @@ class processed_data:
 	'''
 	def __init__(self, orig_data, corr_thresh = None, mut_thresh = None, rel_max_thresh = 5):
 		self.orig_data = orig_data
+		self.sparse = orig_data.sparse
 		self.N_orig = self.orig_data.N
 		self.k = self.orig_data.k
 		self.num_hashes = self.orig_data.num_hashes
@@ -95,13 +131,19 @@ class processed_data:
 			non_mut_prob = (1-mut_thresh)**self.k
 			self.corr_thresh = 2*non_mut_prob            
 		self.rel_max_thresh = rel_max_thresh
-		self.uncorr_indices = self.uncorr_idx()
+		if self.sparse:
+			self.uncorr_indices = self.sparse_uncorr_idx()
+		else:
+			self.uncorr_indices = self.uncorr_idx()
 		self.N = len(self.uncorr_indices)
 		self.idx_to_kmer = self.orig_data.idx_to_kmer
 		self.kmer_to_idx = self.orig_data.kmer_to_idx
 		self.fasta_files = [self.orig_data.fasta_files[i] for i in self.uncorr_indices]
 		#self.dictionary = self.orig_data.dictionary[:,self.uncorr_indices]
-		self.dictionary = self.flatten_dictionary()
+		if self.sparse:
+			self.dictionary = self.sparse_flatten_dictionary()
+		else:
+			self.dictionary = self.flatten_dictionary()
                 
 	def uncorr_idx(self):
 		orig_dict = self.orig_data.dictionary
@@ -117,9 +159,24 @@ class processed_data:
 			if not(corr_flag):
 				uncorr_idx.append(i)
 		return np.array(uncorr_idx).astype(int)
+
+	def sparse_uncorr_idx(self):
+		orig_dict = self.orig_data.dictionary
+		norm_dict = normalize(orig_dict, norm = 'l2', axis = 0)
+		corrs = norm_dict.transpose() * norm_dict
+		uncorr_idx = [0]
+		for i in range(1,self.N_orig):
+			corr_flag = False
+			for j in range(0,i):
+				if corrs[i,j] > self.corr_thresh:
+					corr_flag = True
+					break
+			if not(corr_flag):
+				uncorr_idx.append(i)
+		return np.array(uncorr_idx).astype(int)
     
-    #reduces the peaks of 
-    #assumes min(dict[:,i]) corresponds to count of exactly one kmer
+	#reduces the peaks of dictionary columns
+	#assumes min(dict[:,i]) corresponds to count of exactly one kmer
 	def flatten_dictionary(self):
 		base_dict = self.orig_data.dictionary[:,self.uncorr_indices]
 		flat_dict = np.copy(base_dict)
@@ -130,6 +187,23 @@ class processed_data:
 			#todo: more scientific choice of threshold
 			for j in range(len(self.kmer_to_idx)):
 				if col[j]/m > self.rel_max_thresh:
+					flat_dict[j,i] = self.rel_max_thresh*m
+					removed += base_dict[j,i] - self.rel_max_thresh
+			total_i = 1/m
+			total_i_adj = 1/m - removed
+			flat_dict[:,i] = flat_dict[:,i]*total_i/total_i_adj
+		return flat_dict
+
+	def sparse_flatten_dictionary(self):
+		base_dict = self.orig_data.dictionary[:,self.uncorr_indices]
+		flat_dict = base_dict.copy()
+		for i in range(self.N):
+			col = base_dict[:,i]
+			col_plus = col[col.nonzero()]
+			m = col_plus.min()
+			removed = 0
+			for j in col.nonzero()[0]:
+				if col[j,0]/m > self.rel_max_thresh:
 					flat_dict[j,i] = self.rel_max_thresh*m
 					removed += base_dict[j,i] - self.rel_max_thresh
 			total_i = 1/m
@@ -148,8 +222,10 @@ class processed_data:
 #output: get_mutated_data object, contains multiple mutated samples and aggregated kmer frequency vector
 class get_mutated_data():
 	'''
-	This class is to randomly mutate the original genomes and generate aggregated kmer frequency vector
+	This class is to randomly mutate the original genomes and generate aggregated kmer frequency vector.
+	Supports both sparse and dense matrix formats for proc_data.
 	'''
+	
 	def __init__(self, proc_data, abundance_list, mut_rate_list, total_kmers = None, rnd = True):
 		self.orig_A_matrix = proc_data
 		self.fasta_files = proc_data.fasta_files

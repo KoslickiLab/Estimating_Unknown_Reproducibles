@@ -13,18 +13,11 @@ class get_original_data:
 	'''
 	This class is to take in count estimator(genome sketch) file generated from CMash and creates dictionary matrix and associated metadata
 	'''
-	def __init__(self, db_file, file_names, N, sparse_flag = True, filename = None, filepath = None):
+	def __init__(self, db_file, file_names, N, sparse_flag = True, savepath = None):
 		self.file_names = file_names
 		self.N = N
 		self.sparse = sparse_flag
 		self.dict_files_from_db(db_file)
-		if filename is not None:
-			self.filename = filename
-		else:
-			self.filename = self.dict_filename(filepath)
-		# if self.filename is not None:
-			# with open(self.filename, 'wb') as f:
-			# 	pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
 
 	def dict_files_from_db(self,db_file):
 		genome_files = self.file_names[:self.N]
@@ -39,6 +32,7 @@ class get_original_data:
 			self.dictionary = self.sparse_matrix_from_fasta_files()
 		else:
 			self.dictionary = self.matrix_from_fasta_files()
+		#save dictionary/reload if already computed
 
 	@staticmethod
 	def kmer_union_from_count_estimators(count_estimators):
@@ -46,16 +40,16 @@ class get_original_data:
 		kmer_to_idx = {kmer:idx for idx, kmer in enumerate(idx_to_kmer)}
 		return [idx_to_kmer, kmer_to_idx]
 
-	def dict_filename(self,filepath, N=None):
-		if os.path.isfile(filepath):
-			dict_dir = os.path.dirname(filepath)
-		elif os.path.isdir(filepath):
-			dict_dir = filepath
-		else:
-			raise ValueError('Argument is not a file or directory.')
-		add = '_N'+str(N) if N is not None else ''
-		dict_files = os.path.join(dict_dir, 'A_matrix'+add+'.pkl')
-		return dict_files
+	# def dict_filename(self,filepath, N=None):
+	# 	if os.path.isfile(filepath):
+	# 		dict_dir = os.path.dirname(filepath)
+	# 	elif os.path.isdir(filepath):
+	# 		dict_dir = filepath
+	# 	else:
+	# 		raise ValueError('Argument is not a file or directory.')
+	# 	add = '_N'+str(N) if N is not None else ''
+	# 	dict_files = os.path.join(dict_dir, 'A_matrix'+add+'.pkl')
+	# 	return dict_files
 
 	#Dense matrix generation
 	def matrix_from_fasta_files(self):
@@ -114,7 +108,7 @@ class processed_data:
 	Inputs: get_original_data object, correlation threshold, relative maximum threshold
 	Outputs: processed_data object: similar fields to original_data but with modified dictionary, N, and filenames
 	'''
-	def __init__(self, orig_data, corr_thresh = None, mut_thresh = None, rel_max_thresh = 5):
+	def __init__(self, orig_data, corr_thresh = None, mut_thresh = None, savepath = None, rel_max_thresh = 5):
 		self.orig_data = orig_data
 		self.sparse = orig_data.sparse
 		self.N_orig = self.orig_data.N
@@ -144,6 +138,9 @@ class processed_data:
 			self.dictionary = self.sparse_flatten_dictionary()
 		else:
 			self.dictionary = self.flatten_dictionary()
+		if savepath is not None:
+			with open(savepath, 'wb') as outfile:
+				pickle.dump(self, outfile, pickle.HIGHEST_PROTOCOL)
                 
 	def uncorr_idx(self):
 		orig_dict = self.orig_data.dictionary

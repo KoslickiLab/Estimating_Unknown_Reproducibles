@@ -7,10 +7,11 @@ import cvxpy as cp
 #inputs: matrix A, vector b, weight w
 #output: estimate vector x and metadata
 class lp_solver():
-	def __init__(self, A, b, w, run_now = False):
+	def __init__(self, A, b, w, N, run_now = False):
 		self.A = A
 		self.b = b
 		self.w = w
+		self.N = N
 		if run_now:
 			self.run()
 
@@ -18,8 +19,7 @@ class lp_solver():
 		self.x_opt = self.get_optim()
 
 	def get_optim(self):
-		(M,N) = np.shape(self.A)
-		x = cp.Variable(N)
+		x = cp.Variable(self.N)
 		objective = cp.Minimize(cp.norm(cp.atoms.elementwise.maximum.maximum(self.b - (self.A @ x), 0), 1) \
 		    + self.w*cp.norm(cp.atoms.elementwise.maximum.maximum((self.A @ x) - self.b, 0), 1))
 		constraints = [x >= 0]

@@ -36,7 +36,9 @@ if __name__ == "__main__":
     parser.add_argument('--output_dir', help='Output directory', default='../results', type = str)
     parser.add_argument('--T', help='Number of tests', default=1, type = int)
     parser.add_argument('--nosparse', help='Set to use dense matrices instead of sparse', action='store_false')
-    parser.add_argument('--nosave', help='Results will not be saved if set.', action='store_false')
+    parser.add_argument('--no_results', help='Results will not be saved if set.', action='store_false')
+    parser.add_argument('--savepath', help='File location to save processed dictionary', type = str)
+    parser.add_argument('--loadpath', help='File location to load processed dictionary from', type = str)
     args = parser.parse_args()
     
     k = args.k
@@ -51,11 +53,13 @@ if __name__ == "__main__":
     alpha = args.alpha
     seed = args.seed
     sparse = args.nosparse
-    save = args.nosave
+    save_results = args.no_results
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
     output_dir = args.output_dir
+    savepath = args.savepath
+    loadpath = args.loadpath
     T = args.T
     
     #filename for results
@@ -64,16 +68,16 @@ if __name__ == "__main__":
     result_path = '../results/test_results_%(ts)s' % {'ts': date_time}
     abs_path = os.path.abspath(result_path)
     #create path if doesn't exist
-    if save:
+    if save_results:
         pathlib.Path(result_path).mkdir(parents=True, exist_ok=True)
         abs_filepath = result_path + '/results.csv'
         arg_filepath = result_path + '/args.csv'
         
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(filename)s - %(levelname)s - %(message)s')
-    if save:
+    if save_results:
         logging.info('Program started. Recording results in folder %(abs_filepath)s.' % {'abs_filepath': abs_filepath})
     else:
-        logging.info('Program started. Parameter --nosave set; results WILL NOT be recorded.')
+        logging.info('Program started. Parameter --no_results set; results WILL NOT be recorded.')
 
     logging.info('Beginning test suite with random seed %(seed)d.' % {"seed": seed})
     metadata = mh.get_info_from_single_hdf5(db_file)
@@ -82,15 +86,25 @@ if __name__ == "__main__":
         logging.info(f"The parameter 'N' is set to -1. Program will use all {len(metadata.file_names)} genomes.")
         N = len(metadata.file_names)
 
-    logging.info('Compiling original dictionary.')
-    orig_data = make_data.get_original_data(db_file = db_file, file_names = metadata.file_names, \
-    N=N, sparse_flag = sparse, filepath = output_dir)
-    logging.info('Dictionary generated with type %(dict_type)s' % {"dict_type": type(orig_data.dictionary)})
-    proc_data = make_data.processed_data(orig_data, mut_thresh = mut_thresh)
+    if (savepath is not None) and (loadpath is not None):
+        logging.info('Both savepath and loadpath provided. Dictionary will be loaded from loadpath but no new dictionary will be saved.')
+    
+    if loadpath is not None:
+        logging.info(f'Loading processed data from path {os.path.abspath(loadpath)}')
+        with open(loadpath, 'rb') as infile:
+            proc_data = pickle.load(infile)
+    else:
+        logging.info('Loadpath not provided; compiling original dictionary from scratch.')
+        orig_data = make_data.get_original_data(db_file = db_file, file_names = metadata.file_names, \
+        N=N, sparse_flag = sparse)
+        logging.info('Dictionary generated with type %(dict_type)s' % {"dict_type": type(orig_data.dictionary)})
+        proc_data = make_data.processed_data(orig_data, mut_thresh = mut_thresh, savepath = savepath)
+        if savepath is not None:
+            logging.info(f'Processed data saved at path {os.path.abspath(savepath)}')
     
     logging.info('Preprocessing dictionary.')
     s = ceil(alpha*proc_data.N)
-    if save:
+    if save_results:
         with open(arg_filepath, 'w') as args_f:
             writer = csv.writer(args_f)
             headers = ['k','n','s','raw_N','proc_N','db_file','unif_param','weight','mut_thresh','alpha','seed','output_dir','T']
@@ -101,7 +115,7 @@ if __name__ == "__main__":
     logging.info('Beginning test loop.')
     logging.info('Abundance is automatically set according to dirichlet distribution.')
     logging.info('Mutation rates automatically set according to uniform distribution between %(lower)2f and %(upper)2f.' %{'lower': unif_param[0], 'upper': unif_param[1]})
-    if save:
+    if save_results:
         with open(abs_filepath, 'w') as f:
             writer = csv.writer(f)
             row = ['Iteration','False positives', 'False negatives', 'Max positive rate', 'Min zero rate', 'Absolute error', 'True unknown percent', 'Est unknown pct', 'True unknown minus est unknown','simulation_time','algo_time']
@@ -120,11 +134,10 @@ if __name__ == "__main__":
             
         data = [support, support_abundance, support_mut, proc_abundance, proc_mut_rate_list]
         data_filepath = result_path + '/data.pkl'
-        if save:
+        if save_results:
             with open(data_filepath, 'wb') as f:
                 pickle.dump(data, f)
             
-
         logging.info('Generating mutated data for iteration %(t)d.' % {'t': t+1})
         mut_organisms = make_data.get_mutated_data(proc_data, proc_abundance, proc_mut_rate_list)
         sim_end = time.time()
@@ -147,7 +160,7 @@ if __name__ == "__main__":
 
         logging.info('Saving results for iteration.')
         row = [t+1,num_fp, num_fn, max_pos_rt, min_zero_rt, EE.abs_err(), round(EE.unknown_pct(),6), EE.unknown_pct_est(), EE.unknown_pct()-EE.unknown_pct_est(), sim_time, algo_time]
-        if save:
+        if save_results:
             with open(abs_filepath, 'a') as f:
                 writer = csv.writer(f)
                 writer.writerow(row)

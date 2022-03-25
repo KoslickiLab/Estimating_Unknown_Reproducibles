@@ -23,6 +23,8 @@ if __name__ == "__main__":
 	parser.add_argument('--weight', help='False negative discount weight', default=None, type = float)
 	parser.add_argument('--seed', help='Random seed', default=None, type = int)
 	parser.add_argument('--output_dir', help='Output directory', default='../results', type = str)
+	parser.add_argument('--savepath', help='File location to save processed dictionary', type = str)
+	parser.add_argument('--loadpath', help='File location to load processed dictionary from', type = str)
 	args = parser.parse_args()
 
 	## set up basic log information

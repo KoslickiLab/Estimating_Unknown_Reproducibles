@@ -40,17 +40,6 @@ class get_original_data:
 		kmer_to_idx = {kmer:idx for idx, kmer in enumerate(idx_to_kmer)}
 		return [idx_to_kmer, kmer_to_idx]
 
-	# def dict_filename(self,filepath, N=None):
-	# 	if os.path.isfile(filepath):
-	# 		dict_dir = os.path.dirname(filepath)
-	# 	elif os.path.isdir(filepath):
-	# 		dict_dir = filepath
-	# 	else:
-	# 		raise ValueError('Argument is not a file or directory.')
-	# 	add = '_N'+str(N) if N is not None else ''
-	# 	dict_files = os.path.join(dict_dir, 'A_matrix'+add+'.pkl')
-	# 	return dict_files
-
 	#Dense matrix generation
 	def matrix_from_fasta_files(self):
 		max_available_cpu = int(cpu_count()*(2/3))
@@ -247,8 +236,13 @@ class get_mutated_data():
 		else:
 			n_processes = max_available_cpu
 		params = zip(self.fasta_files, [self.total_kmers]*self.N, self.mut_rate_list, self.abundance_list, [self.kmer_to_idx]*self.N)
-		with Pool(processes=n_processes) as excutator:
-			res = list(excutator.map(self.get_single_mutated_organism, params))
+		#TEMPORARY for debugging
+		try:
+			with Pool(processes=n_processes) as excutator:
+				res = list(excutator.map(self.get_single_mutated_organism, params))
+		except Exception as err:
+			print("Error: {0}".format(err))
+			raise RuntimeError('Debugging exception found.')
 		self.mut_orgs += [curr_mut_org for (curr_mut_org, _) in res]
 		self.mut_kmer_ct += np.sum(np.vstack([mut_kmer_ct for (_, mut_kmer_ct) in res]), axis=0)
 		if self.rnd:
@@ -256,7 +250,12 @@ class get_mutated_data():
 
 	@staticmethod
 	def get_single_mutated_organism(this_param):
-		fasta_file, total_kmers, mut_rate, rel_abundance, kmer_to_idx = this_param
-		curr_mut_org = mso.get_mutated_seq_and_kmers(fasta_file, kmer_to_idx, mut_rate)
-		mut_kmer_ct = total_kmers*rel_abundance*curr_mut_org.mut_kmer_ct
-		return [curr_mut_org, mut_kmer_ct]
+		try:
+			fasta_file, total_kmers, mut_rate, rel_abundance, kmer_to_idx = this_param
+			curr_mut_org = mso.get_mutated_seq_and_kmers(fasta_file, kmer_to_idx, mut_rate)
+			mut_kmer_ct = total_kmers*rel_abundance*curr_mut_org.mut_kmer_ct
+			return [curr_mut_org, mut_kmer_ct]
+		#TEMPORARY for debugging
+		except Exception as err:
+			print("Error: {0}".format(err))
+			raise RuntimeError('Debugging exception found.')

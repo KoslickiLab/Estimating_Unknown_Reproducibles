@@ -98,11 +98,11 @@ if __name__ == "__main__":
         orig_data = make_data.get_original_data(db_file = db_file, file_names = metadata.file_names, \
         N=N, sparse_flag = sparse)
         logging.info('Dictionary generated with type %(dict_type)s' % {"dict_type": type(orig_data.dictionary)})
+        logging.info('Preprocessing dictionary.')
         proc_data = make_data.processed_data(orig_data, mut_thresh = mut_thresh, savepath = savepath)
         if savepath is not None:
             logging.info(f'Processed data saved at path {os.path.abspath(savepath)}')
     
-    logging.info('Preprocessing dictionary.')
     s = ceil(alpha*proc_data.N)
     if save_results:
         with open(arg_filepath, 'w') as args_f:

@@ -139,7 +139,7 @@ if __name__ == "__main__":
                 pickle.dump(data, f)
             
         logging.info('Generating mutated data for iteration %(t)d.' % {'t': t+1})
-        mut_organisms = make_data.get_mutated_data(proc_data, proc_abundance, proc_mut_rate_list)
+        mut_organisms = make_data.get_mutated_data(proc_data, proc_abundance, proc_mut_rate_list,seed = seed)
         sim_end = time.time()
         sim_time = sim_end - sim_start
 

@@ -97,7 +97,7 @@ class processed_data:
 	Inputs: get_original_data object, correlation threshold, relative maximum threshold
 	Outputs: processed_data object: similar fields to original_data but with modified dictionary, N, and filenames
 	'''
-	def __init__(self, orig_data, corr_thresh = None, mut_thresh = None, savepath = None, rel_max_thresh = 5):
+	def __init__(self, orig_data, corr_thresh = None, mut_thresh = None, savepath = None, rel_max_thresh = 5, seed = None):
 		self.orig_data = orig_data
 		self.sparse = orig_data.sparse
 		self.N_orig = self.orig_data.N
@@ -212,7 +212,7 @@ class get_mutated_data():
 	Supports both sparse and dense matrix formats for proc_data.
 	'''
 	
-	def __init__(self, proc_data, abundance_list, mut_rate_list, total_kmers = None, rnd = True):
+	def __init__(self, proc_data, abundance_list, mut_rate_list, total_kmers = None, rnd = True, seed = None):
 		self.orig_A_matrix = proc_data
 		self.fasta_files = proc_data.fasta_files
 		self.kmer_to_idx = proc_data.kmer_to_idx
@@ -221,6 +221,7 @@ class get_mutated_data():
 		self.mut_rate_list = mut_rate_list
 		self.rnd = rnd
 		self.N = len(self.fasta_files)
+		self.seed = seed
 		if total_kmers is None:
 			#scale total kmers for number of organisms--needs fine-tuning        
 			self.total_kmers = self.N*pow(10,10)
@@ -235,7 +236,7 @@ class get_mutated_data():
 			n_processes = self.N
 		else:
 			n_processes = max_available_cpu
-		params = zip(self.fasta_files, [self.total_kmers]*self.N, self.mut_rate_list, self.abundance_list, [self.kmer_to_idx]*self.N)
+		params = zip(self.fasta_files, [self.total_kmers]*self.N, self.mut_rate_list, self.abundance_list, [self.kmer_to_idx]*self.N, [self.seed]*self.N)
 		#TEMPORARY for debugging
 		try:
 			with Pool(processes=n_processes) as excutator:
@@ -251,8 +252,8 @@ class get_mutated_data():
 	@staticmethod
 	def get_single_mutated_organism(this_param):
 		try:
-			fasta_file, total_kmers, mut_rate, rel_abundance, kmer_to_idx = this_param
-			curr_mut_org = mso.get_mutated_seq_and_kmers(fasta_file, kmer_to_idx, mut_rate)
+			fasta_file, total_kmers, mut_rate, rel_abundance, kmer_to_idx, seed = this_param
+			curr_mut_org = mso.get_mutated_seq_and_kmers(fasta_file, kmer_to_idx, mut_rate, seed)
 			mut_kmer_ct = total_kmers*rel_abundance*curr_mut_org.mut_kmer_ct
 			return [curr_mut_org, mut_kmer_ct]
 		#TEMPORARY for debugging

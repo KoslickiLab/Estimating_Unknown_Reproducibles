@@ -1,4 +1,6 @@
 import os
+import sys
+sys.path.append('/home/cqm5886/work/Estimating_Unknown/test/scripts')
 import numpy as np
 import make_data
 import freq_est_from_mut as ferm
@@ -35,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', help='Random seed', default=None, type = int)
     parser.add_argument('--output_dir', help='Output directory', default='../results', type = str)
     parser.add_argument('--T', help='Number of tests', default=1, type = int)
+    parser.add_argument('--cpu', help='Number of cpu', default=50, type = int)
     parser.add_argument('--nosparse', help='Set to use dense matrices instead of sparse', action='store_false')
     parser.add_argument('--no_results', help='Results will not be saved if set.', action='store_false')
     parser.add_argument('--savepath', help='File location to save processed dictionary', type = str)
@@ -47,6 +50,8 @@ if __name__ == "__main__":
     
     if args.db_file is None:
         db_file = '../files/database_test/cdb_n'+str(n)+'_k'+str(k)+'/cdb.h5'
+    else:
+        db_file = args.db_file
     unif_param = args.unif_param
     weight = args.weight
     mut_thresh = args.mut_thresh
@@ -139,7 +144,7 @@ if __name__ == "__main__":
                 pickle.dump(data, f)
             
         logging.info('Generating mutated data for iteration %(t)d.' % {'t': t+1})
-        mut_organisms = make_data.get_mutated_data(proc_data, proc_abundance, proc_mut_rate_list,seed = seed)
+        mut_organisms = make_data.get_mutated_data(proc_data, proc_abundance, proc_mut_rate_list, seed = seed, use_cpu = args.cpu)
         sim_end = time.time()
         sim_time = sim_end - sim_start
 

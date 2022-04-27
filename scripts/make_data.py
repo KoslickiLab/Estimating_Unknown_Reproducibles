@@ -1,4 +1,5 @@
 import os
+import sys
 import numpy as np
 import MinHash as mh
 import pickle
@@ -212,7 +213,7 @@ class get_mutated_data():
 	Supports both sparse and dense matrix formats for proc_data.
 	'''
 	
-	def __init__(self, proc_data, abundance_list, mut_rate_list, total_kmers = None, rnd = True, seed = None):
+	def __init__(self, proc_data, abundance_list, mut_rate_list, total_kmers = None, rnd = True, seed = None, use_cpu=50):
 		self.orig_A_matrix = proc_data
 		self.fasta_files = proc_data.fasta_files
 		self.kmer_to_idx = proc_data.kmer_to_idx
@@ -222,41 +223,42 @@ class get_mutated_data():
 		self.rnd = rnd
 		self.N = len(self.fasta_files)
 		self.seed = seed
+		self.use_cpu = use_cpu
 		if total_kmers is None:
 			#scale total kmers for number of organisms--needs fine-tuning        
 			self.total_kmers = self.N*pow(10,10)
 		else:
 			self.total_kmers = total_kmers
-		self.mut_orgs = []
+		# self.mut_orgs = []
 		self.get_all_mutated_organism()
 
 	def get_all_mutated_organism(self):
-		max_available_cpu = int(cpu_count()*(2/3))
-		if self.N < max_available_cpu:
+		# max_available_cpu = int(cpu_count()*(2/3))
+		if self.N < self.use_cpu:
 			n_processes = self.N
 		else:
-			n_processes = max_available_cpu
+			n_processes = self.use_cpu
 		params = zip(self.fasta_files, [self.total_kmers]*self.N, self.mut_rate_list, self.abundance_list, [self.kmer_to_idx]*self.N, [self.seed]*self.N)
 		#TEMPORARY for debugging
 		try:
 			with Pool(processes=n_processes) as excutator:
 				res = list(excutator.map(self.get_single_mutated_organism, params))
-		except Exception as err:
-			print("Error: {0}".format(err))
+		except (BrokenPipeError, IOError):
+			print ('BrokenPipeError caught', file = sys.stderr)
 			raise RuntimeError('Debugging exception found.')
-		self.mut_orgs += [curr_mut_org for (curr_mut_org, _) in res]
+		# self.mut_orgs += [curr_mut_org for (curr_mut_org, _) in res]
 		self.mut_kmer_ct += np.sum(np.vstack([mut_kmer_ct for (_, mut_kmer_ct) in res]), axis=0)
 		if self.rnd:
 			self.mut_kmer_ct = np.round(self.mut_kmer_ct)
 
 	@staticmethod
 	def get_single_mutated_organism(this_param):
-		try:
-			fasta_file, total_kmers, mut_rate, rel_abundance, kmer_to_idx, seed = this_param
-			curr_mut_org = mso.get_mutated_seq_and_kmers(fasta_file, kmer_to_idx, mut_rate, seed)
-			mut_kmer_ct = total_kmers*rel_abundance*curr_mut_org.mut_kmer_ct
-			return [curr_mut_org, mut_kmer_ct]
-		#TEMPORARY for debugging
-		except Exception as err:
-			print("Error: {0}".format(err))
-			raise RuntimeError('Debugging exception found.')
+		# try:
+		fasta_file, total_kmers, mut_rate, rel_abundance, kmer_to_idx, seed = this_param
+		curr_mut_org = mso.get_mutated_seq_and_kmers(fasta_file, kmer_to_idx, mut_rate, seed)
+		mut_kmer_ct = total_kmers*rel_abundance*curr_mut_org.mut_kmer_ct
+		return [curr_mut_org, mut_kmer_ct]
+		# #TEMPORARY for debugging
+		# except Exception as err:
+		# 	print("Error: {0}".format(err))
+		# 	raise RuntimeError('Debugging exception found.')

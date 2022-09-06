@@ -125,7 +125,7 @@ if __name__ == "__main__":
             writer = csv.writer(f)
             row = ['Iteration','False positives', 'False negatives', 'Max positive rate', 'Min zero rate', 'Absolute error', 'True unknown percent', 'Est unknown pct', 'True unknown minus est unknown','simulation_time','algo_time']
             writer.writerow(row)
-        
+    performance = np.zeros((T,6))
     for t in range(T):
         sim_start = time.time()
         support_abundance = list(np.random.dirichlet(np.ones(s),size=1).reshape(-1))
@@ -162,6 +162,7 @@ if __name__ == "__main__":
         num_fn = np.sum(fn)
         max_pos_rt = EE.max_nonzero_rate()
         min_zero_rt = EE.min_zero_rate()
+        performance[t,:] = [num_fp,num_fn,max_pos_rt,min_zero_rt, EE.abs_err(),EE.unknown_pct()-EE.unknown_pct_est()]
 
         logging.info('Saving results for iteration.')
         row = [t+1,num_fp, num_fn, max_pos_rt, min_zero_rt, EE.abs_err(), round(EE.unknown_pct(),6), EE.unknown_pct_est(), EE.unknown_pct()-EE.unknown_pct_est(), sim_time, algo_time]
@@ -171,5 +172,9 @@ if __name__ == "__main__":
                 writer.writerow(row)
 
         logging.info('Test iteration %(t)d complete.' % {'t': t+1})
-
-        logging.info('Testing complete.')
+        
+    avg_perf = np.mean(performance, axis = 0)
+    print(np.shape(avg_perf))
+    logging.info('Testing complete.')
+    logging.info('Performance:\nAvg false positives: %2f\nAvg false negatives: %2f\nAvg Abs Error: %2f\nAvg Est Error: %2f'%(avg_perf[0],avg_perf[1],avg_perf[4],avg_perf[5]))
+        

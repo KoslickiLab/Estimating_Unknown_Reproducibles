@@ -1,2 +1,0 @@
-k,n,N,db_file,unif_param,weight,mut_thresh,alpha,seed,output_dir,T
-51,1000,100,../files/database_test/cdb_n1000_k51/cdb.h5,"[0.01, 0.09]",,0.05,0.05,12345,../results,10

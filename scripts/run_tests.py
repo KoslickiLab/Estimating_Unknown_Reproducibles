@@ -39,7 +39,7 @@ if __name__ == "__main__":
     parser.add_argument('--T', help='Number of tests', default=1, type = int)
     parser.add_argument('--cpu', help='Number of cpu', default=50, type = int)
     parser.add_argument('--nosparse', help='Set to use dense matrices instead of sparse', action='store_false')
-    parser.add_argument('--no_results', help='Results will not be saved if set.', action='store_false')
+    parser.add_argument('--save_results', help='Results will be saved if set.', action='store_true')
     parser.add_argument('--savepath', help='File location to save processed dictionary', type = str)
     parser.add_argument('--loadpath', help='File location to load processed dictionary from', type = str)
     args = parser.parse_args()
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     alpha = args.alpha
     seed = args.seed
     sparse = args.nosparse
-    save_results = args.no_results
+    save_results = args.save_results
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     if save_results:
         logging.info('Program started. Recording results in folder %(abs_filepath)s.' % {'abs_filepath': abs_filepath})
     else:
-        logging.info('Program started. Parameter --no_results set; results WILL NOT be recorded.')
+        logging.info('Program started. Parameter --save_results set not set; results WILL NOT be recorded.')
 
     logging.info('Beginning test suite with random seed %(seed)d.' % {"seed": seed})
     metadata = mh.get_info_from_single_hdf5(db_file)
@@ -148,7 +148,7 @@ if __name__ == "__main__":
         sim_end = time.time()
         sim_time = sim_end - sim_start
 
-        logging.info('Estimating Frequencies for iteration %(t)d.' % {'t': t+1})
+        logging.info('Estimating frequencies for iteration %(t)d.' % {'t': t+1})
         FE = ferm.frequency_estimator(mut_organisms, w=weight)
 
         logging.info('Evaluating performance for iteration %(t)d.' % {'t': t+1})

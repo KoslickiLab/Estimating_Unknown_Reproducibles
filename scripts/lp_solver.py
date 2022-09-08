@@ -38,5 +38,8 @@ class lp_solver():
 
 
 	def run(self):
-		if not self.lp_flag:
+		if hasattr(self, 'lp_flag'):
+			if not self.lp_flag:
+				self.x_opt = self.get_optim()
+		else:
 			self.x_opt = self.get_optim()

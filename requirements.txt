@@ -1,0 +1,11 @@
+khmer
+numpy
+h5py
+six
+scipy
+biopython
+scikit-learn
+scikit-learn-intelex
+gurobipy
+cvxpy
+pandas

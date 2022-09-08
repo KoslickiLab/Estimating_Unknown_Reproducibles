@@ -32,7 +32,7 @@ class lp_solver():
 			u - v + (self.A @ x) == self.b,
 		]
 		prob = cp.Problem(objective, constraints)
-		result = prob.solve(solver = cp.GUROBI)
+		result = prob.solve(solver = cp.GUROBI, verbose=True)
 		prod = self.A@x.value
 		return x.value
 

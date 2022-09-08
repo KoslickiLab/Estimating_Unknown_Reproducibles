@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
 	## calculate original data
 	logging.info("calculate original data.")
-	orig_A_matrix = make_data.get_original_data(db_file = args.db_file, file_names = args.metadata.file_names, N = N, filepath = args.output_dir)
+	orig_A_matrix = make_data.get_original_data(db_file = args.db_file, file_names = args.metadata.file_names, N = N, savepath = args.output_dir)
 
 	## calculate mutated data
 	logging.info("calculate mutated data.")

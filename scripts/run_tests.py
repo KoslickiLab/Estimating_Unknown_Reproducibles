@@ -7,7 +7,6 @@ import freq_est_from_mut as ferm
 import est_eval as ee
 import argparse
 import logging
-import matplotlib.pyplot as plt
 import pandas as pd
 import MinHash as mh
 import warnings
@@ -112,7 +111,8 @@ if __name__ == "__main__":
     if save_results:
         with open(arg_filepath, 'w') as args_f:
             writer = csv.writer(args_f)
-            headers = ['k','n','s','raw_N','proc_N','db_file','unif_param','weight','mut_thresh','alpha','seed','output_dir','T']
+            headers = ['k','n','s','raw_N','proc_N','db_file','unif_param','weight',
+                       'mut_thresh','alpha','seed','output_dir','T']
             row = [k,n,s, N,proc_data.N, db_file,unif_param,weight,mut_thresh,alpha,seed,output_dir,T]
             writer.writerow(headers)
             writer.writerow(row)

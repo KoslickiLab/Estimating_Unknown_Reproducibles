@@ -123,7 +123,6 @@ class processed_data:
 		self.idx_to_kmer = self.orig_data.idx_to_kmer
 		self.kmer_to_idx = self.orig_data.kmer_to_idx
 		self.fasta_files = [self.orig_data.fasta_files[i] for i in self.uncorr_indices]
-		#self.dictionary = self.orig_data.dictionary[:,self.uncorr_indices]
 		if self.sparse:
 			self.dictionary = self.sparse_flatten_dictionary()
 		else:

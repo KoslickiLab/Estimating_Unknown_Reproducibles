@@ -1,7 +1,6 @@
 import numpy as np
 from Bio import SeqIO
 import utils
-import pdb
 
 #class for mutating storing mutated and unmutated data on single organism
 #input: single FNA file

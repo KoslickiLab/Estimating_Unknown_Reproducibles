@@ -20,24 +20,8 @@ from datetime import datetime
 import pickle
 import pathlib
 warnings.filterwarnings("ignore")
+import pdb
 
-# parser = argparse.ArgumentParser(description="This script runs random tests on a given organism dictionary.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-# parser.add_argument('--k', default = 51, help='kmer size')
-# parser.add_argument('--db_file', default = None, help='file with count estimators')
-# parser.add_argument('--n', help='Number of kmers from sketch per organism', default=1000, type = int)
-# parser.add_argument('--N', help='Number of organisms in dictionary', default=100, type = int)
-# parser.add_argument('--unif_param', help='Bounds for random mutation rate', default=[0.01, 0.09], type = float, nargs = '+')
-# parser.add_argument('--weight', help='False negative discount weight', default=None, type = float)
-# parser.add_argument('--mut_thresh', help='mutation threshold', default=0.05, type = float)
-# parser.add_argument('--alpha', help='Proportion of dictionary in sample', default=0.05, type = float)
-# parser.add_argument('--seed', help='Random seed', default=None, type = int)
-# parser.add_argument('--output_dir', help='Output directory', default='../results', type = str)
-# parser.add_argument('--T', help='Number of tests', default=1, type = int)
-# parser.add_argument('--cpu', help='Number of cpu', default=50, type = int)
-# parser.add_argument('--nosparse', help='Set to use dense matrices instead of sparse', action='store_false')
-# parser.add_argument('--save_results', help='Results will be saved if set.', action='store_true')
-# parser.add_argument('--savepath', help='File location to save processed dictionary', type = str)
-# parser.add_argument('--loadpath', help='File location to load processed dictionary from', type = str)
 
 class test_instance():
     def __init__(
@@ -49,6 +33,7 @@ class test_instance():
         weight = None,
         seed = None,
         cpu = 1,
+        writepath = None,
         run_now = True,
     ):
         self.s = s
@@ -58,6 +43,7 @@ class test_instance():
         self.mut_thresh = mut_thresh
         self.weight = weight
         self.seed = seed
+        self.writepath = writepath
         if run_now:
             self.run_test(cpu = cpu)
         
@@ -74,7 +60,7 @@ class test_instance():
         self.proc_mut_rate_list[self.support] = self.support_mut
 
         self.mut_organisms = make_data.get_mutated_data(self.proc_data, self.proc_abundance,
-                                                        self.proc_mut_rate_list, seed = self.seed, use_cpu = cpu)
+                                                        self.proc_mut_rate_list, seed = self.seed, use_cpu = cpu, writepath = self.writepath)
 
         sim_end = time.time()
         self.sim_time = sim_end - sim_start
@@ -92,10 +78,12 @@ class test_instance():
         self.algo_time = algo_end - sim_end
         
         self.fp, self.fn, rfp, rfn = self.EE.classification_err()
-        self.num_fp = np.sum(fp) 
-        self.num_fn = np.sum(fn)
+        self.num_fp = np.sum(self.fp) 
+        self.num_fn = np.sum(self.fn)
         self.max_pos_rt = self.EE.max_nonzero_rate()
         self.min_zero_rt = self.EE.min_zero_rate()
-        self.abs_err = self.EE.abs_err(),
+        self.abs_err = self.EE.abs_err()
+        self.unknown_pct = self.EE.unknown_pct()
+        self.unknown_pct_est = self.EE.unknown_pct_est()
         self.unknown_pct_diff = self.EE.unknown_pct()-self.EE.unknown_pct_est()
 

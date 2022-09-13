@@ -5,6 +5,7 @@ import numpy as np
 import make_data
 import freq_est_from_mut as ferm
 import est_eval as ee
+import run_single_test as rst
 import argparse
 import logging
 import pandas as pd
@@ -19,6 +20,7 @@ import csv
 from datetime import datetime
 import pickle
 import pathlib
+import zipfile
 warnings.filterwarnings("ignore")
 
 
@@ -39,6 +41,7 @@ if __name__ == "__main__":
     parser.add_argument('--cpu', help='Number of cpu', default=50, type = int)
     parser.add_argument('--nosparse', help='Set to use dense matrices instead of sparse', action='store_false')
     parser.add_argument('--save_results', help='Results will be saved if set.', action='store_true')
+    parser.add_argument('--save_mutations', help='Mutated strings will be saved if set.', action='store_true')    
     parser.add_argument('--savepath', help='File location to save processed dictionary', type = str)
     parser.add_argument('--loadpath', help='File location to load processed dictionary from', type = str)
     args = parser.parse_args()
@@ -58,6 +61,7 @@ if __name__ == "__main__":
     seed = args.seed
     sparse = args.nosparse
     save_results = args.save_results
+    save_mut = args.save_mutations
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
@@ -65,17 +69,23 @@ if __name__ == "__main__":
     savepath = args.savepath
     loadpath = args.loadpath
     T = args.T
+    cpu = args.cpu
     
     #filename for results
     now = datetime.now()
     date_time = now.strftime("%m_%d_%Y_%H_%M")
     result_path = '../results/test_results_%(ts)s' % {'ts': date_time}
+    mut_path = result_path + '/mutations'
     abs_path = os.path.abspath(result_path)
     #create path if doesn't exist
     if save_results:
         pathlib.Path(result_path).mkdir(parents=True, exist_ok=True)
         abs_filepath = result_path + '/results.csv'
         arg_filepath = result_path + '/args.csv'
+        uncorr_idx_filepath = result_path + '/uncorr_idx.csv'
+        proc_abund_filepath = result_path + '/processed_abundance.csv'
+    if save_mut:
+        pathlib.Path(mut_path).mkdir(parents=True, exist_ok=True)
         
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(filename)s - %(levelname)s - %(message)s')
     if save_results:
@@ -106,6 +116,10 @@ if __name__ == "__main__":
         proc_data = make_data.processed_data(orig_data, mut_thresh = mut_thresh, savepath = savepath)
         if savepath is not None:
             logging.info(f'Processed data saved at path {os.path.abspath(savepath)}')
+    if save_results:
+        with open(uncorr_idx_filepath, 'a') as f:
+            writer = csv.writer(f)
+            writer.writerow(proc_data.uncorr_indices)
     
     s = ceil(alpha*proc_data.N)
     if save_results:
@@ -126,55 +140,63 @@ if __name__ == "__main__":
             row = ['Iteration','False positives', 'False negatives', 'Max positive rate', 'Min zero rate', 'Absolute error', 'True unknown percent', 'Est unknown pct', 'True unknown minus est unknown','simulation_time','algo_time']
             writer.writerow(row)
     performance = np.zeros((T,6))
+    
+    tests = []
     for t in range(T):
-        sim_start = time.time()
-        support_abundance = list(np.random.dirichlet(np.ones(s),size=1).reshape(-1))
-        support_mut = list(np.random.uniform(unif_param[0],unif_param[1],s))
-        support = random.sample(list(range(proc_data.N)),s)
-        proc_abundance = [0]*proc_data.N
-        proc_mut_rate_list = [0]*proc_data.N
-        for i in range(s):
-            proc_abundance[support[i]] = support_abundance[i]
-            proc_mut_rate_list[support[i]] = support_mut[i]
-            
-        data = [support, support_abundance, support_mut, proc_abundance, proc_mut_rate_list]
-        data_filepath = result_path + '/data.pkl'
-        if save_results:
-            with open(data_filepath, 'wb') as f:
-                pickle.dump(data, f)
-            
-        logging.info('Generating mutated data for iteration %(t)d.' % {'t': t+1})
-        mut_organisms = make_data.get_mutated_data(proc_data, proc_abundance, proc_mut_rate_list, seed = seed, use_cpu = args.cpu)
-        sim_end = time.time()
-        sim_time = sim_end - sim_start
+        if save_mut:
+            curr_mut_path = mut_path + '/iter_%(t)d' % {'t': t+1}
+            pathlib.Path(curr_mut_path).mkdir(parents=True, exist_ok=True)
+        else:
+            curr_mut_path = None
+        
+        curr_test = rst.test_instance(
+            s,
+            unif_param,
+            proc_data,
+            mut_thresh = mut_thresh,
+            weight = weight,
+            seed = seed,
+            cpu = cpu,
+            writepath = curr_mut_path,
+            run_now = True,
+        )
 
-        logging.info('Estimating frequencies for iteration %(t)d.' % {'t': t+1})
-        FE = ferm.frequency_estimator(mut_organisms, w=weight)
-
-        logging.info('Evaluating performance for iteration %(t)d.' % {'t': t+1})
-
-        EE = ee.est_evaluator(proc_abundance,proc_mut_rate_list,mut_thresh,FE.freq_est)
-        algo_end = time.time()
-        algo_time = algo_end - sim_end
-
-        fp, fn, rfp, rfn = EE.classification_err()
-        num_fp = np.sum(fp)
-        num_fn = np.sum(fn)
-        max_pos_rt = EE.max_nonzero_rate()
-        min_zero_rt = EE.min_zero_rate()
-        performance[t,:] = [num_fp,num_fn,max_pos_rt,min_zero_rt, EE.abs_err(),EE.unknown_pct()-EE.unknown_pct_est()]
+        performance[t,:] = [
+            curr_test.num_fp,
+            curr_test.num_fn,
+            curr_test.max_pos_rt,
+            curr_test.min_zero_rt,
+            curr_test.abs_err,
+            curr_test.unknown_pct_diff,
+        ]
 
         logging.info('Saving results for iteration.')
-        row = [t+1,num_fp, num_fn, max_pos_rt, min_zero_rt, EE.abs_err(), round(EE.unknown_pct(),6), EE.unknown_pct_est(), EE.unknown_pct()-EE.unknown_pct_est(), sim_time, algo_time]
+
         if save_results:
+            row = [
+                t+1,
+                curr_test.num_fp,
+                curr_test.num_fn,
+                curr_test.max_pos_rt,
+                curr_test.min_zero_rt,
+                curr_test.abs_err,
+                round(curr_test.unknown_pct,6),
+                curr_test.unknown_pct_est,
+                curr_test.unknown_pct_diff,
+                curr_test.sim_time,
+                curr_test.algo_time,
+            ]
             with open(abs_filepath, 'a') as f:
                 writer = csv.writer(f)
                 writer.writerow(row)
-
+                
+            with open(proc_abund_filepath, 'a') as f:
+                writer = csv.writer(f)
+                writer.writerow(curr_test.proc_abundance)
+                
         logging.info('Test iteration %(t)d complete.' % {'t': t+1})
         
     avg_perf = np.mean(performance, axis = 0)
-    print(np.shape(avg_perf))
     logging.info('Testing complete.')
     logging.info('Performance:\nAvg false positives: %2f\nAvg false negatives: %2f\nAvg Abs Error: %2f\nAvg Est Error: %2f'%(avg_perf[0],avg_perf[1],avg_perf[4],avg_perf[5]))
         

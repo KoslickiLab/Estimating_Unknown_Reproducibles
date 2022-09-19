@@ -20,6 +20,7 @@ from datetime import datetime
 import pickle
 import pathlib
 warnings.filterwarnings("ignore")
+import pdb
 
 
 class test_instance():
@@ -49,15 +50,19 @@ class test_instance():
     def run_test(self, cpu = 1):
         sim_start = time.time()
 
-        self.support = random.sample(list(range(self.N_proc)),self.s)
+        self.support = np.sort(random.sample(list(range(self.N_proc)),self.s))
+        self.support_raw = self.proc_data.uncorr_indices[self.support]
         self.support_abundance = list(np.random.dirichlet(np.ones(self.s),size=1).reshape(-1))
         self.support_mut = list(np.random.uniform(self.unif_param[0],self.unif_param[1],self.s))
         self.proc_abundance = np.zeros(self.N_proc)
         self.proc_abundance[self.support] = self.support_abundance
-
+        self.support_orgs = [self.proc_data.fasta_files[i].title().split('/')[-1] for i in self.support]
         self.proc_mut_rate_list = np.zeros(self.N_proc)
         self.proc_mut_rate_list[self.support] = self.support_mut
+        self.support_known_flag = [(mut <= self.mut_thresh) for mut in self.support_mut]
 
+        #pdb.set_trace()
+        
         self.mut_organisms = make_data.get_mutated_data(self.proc_data, self.proc_abundance,
                                                         self.proc_mut_rate_list, seed = self.seed, use_cpu = cpu, writepath = self.writepath)
 
@@ -85,4 +90,5 @@ class test_instance():
         self.unknown_pct = self.EE.unknown_pct()
         self.unknown_pct_est = self.EE.unknown_pct_est()
         self.unknown_pct_diff = self.EE.unknown_pct()-self.EE.unknown_pct_est()
+        
 

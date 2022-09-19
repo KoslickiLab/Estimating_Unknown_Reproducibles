@@ -160,6 +160,20 @@ if __name__ == "__main__":
             writepath = curr_mut_path,
             run_now = True,
         )
+        
+        support_file = curr_mut_path + '/supp.csv'
+        with open(support_file, 'w') as f:
+            writer = csv.writer(f)
+            headers = ['raw_idx','abundance','mut_rate','known_flag','organism']
+            writer.writerow(headers)
+            for i in range(len(curr_test.support)):
+                row = [curr_test.support_raw[i],
+                       curr_test.support_abundance[i], 
+                       curr_test.support_mut[i],
+                       curr_test.support_known_flag[i],
+                       curr_test.support_orgs[i],
+                      ]
+                writer.writerow(row)
 
         performance[t,:] = [
             curr_test.num_fp,

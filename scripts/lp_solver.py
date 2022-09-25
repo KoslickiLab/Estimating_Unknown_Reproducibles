@@ -13,7 +13,7 @@ class lp_solver():
 		self.w = w
 		self.K, self.N = np.shape(self.A)
 		if run_now:
-			self.run()
+			self.x_opt = self.get_optim()
 
 
 	def get_optim(self):
@@ -32,10 +32,6 @@ class lp_solver():
 			u - v + (self.A @ x) == self.b,
 		]
 		prob = cp.Problem(objective, constraints)
-		result = prob.solve(solver = cp.GUROBI, verbose=False)
+		result = prob.solve(solver = cp.SCIPY, verbose=False)
 		prod = self.A@x.value
 		return x.value
-
-
-	def run(self):
-		self.x_opt = self.get_optim()

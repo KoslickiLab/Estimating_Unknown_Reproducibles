@@ -5,6 +5,7 @@ import MinHash as mh
 import pickle
 import mutate_single_organism as mso
 import utils
+import process_dictionary as pd
 import scipy.sparse.linalg as spla
 from sklearn.preprocessing import normalize
 from scipy.sparse import csc_matrix
@@ -18,7 +19,6 @@ class get_original_data:
     def __init__(self, db_file, file_names, N, sparse_flag = True, savepath = None):
         self.file_names = file_names
         self.N = N
-        self.sparse = sparse_flag
         self.dict_files_from_db(db_file)
 
     def dict_files_from_db(self,db_file):
@@ -30,37 +30,13 @@ class get_original_data:
         self.fasta_files = genome_files
         self.idx_to_kmer = idx_to_kmer
         self.kmer_to_idx = kmer_to_idx
-        if self.sparse:
-            self.dictionary = self.sparse_matrix_from_fasta_files()
-        else:
-            self.dictionary = self.matrix_from_fasta_files()
-        #save dictionary/reload if already computed
+        self.dictionary = self.sparse_matrix_from_fasta_files()
 
     @staticmethod
     def kmer_union_from_count_estimators(count_estimators):
         idx_to_kmer = list({kmer for ce in count_estimators for kmer in ce._kmers})
         kmer_to_idx = {kmer:idx for idx, kmer in enumerate(idx_to_kmer)}
         return [idx_to_kmer, kmer_to_idx]
-
-    #Dense matrix generation
-    def matrix_from_fasta_files(self):
-        max_available_cpu = int(cpu_count()*(2/3))
-        if self.N < max_available_cpu:
-            n_processes = self.N
-        else:
-            n_processes = max_available_cpu
-        params = zip(self.fasta_files, [self.k]*self.N, [self.kmer_to_idx]*self.N)
-        with Pool(processes=n_processes) as excutator:
-            res = excutator.map(self.get_count_from_single_organism, params)
-        freq_matrix_A = np.vstack(res).T
-        return freq_matrix_A
-
-    @staticmethod
-    def get_count_from_single_organism(this_param):
-        fasta_file, k, kmer_to_idx = this_param
-        curr_seqs = utils.fasta_to_ATCG_seq_list(fasta_file)
-        this_normalized_count, _ = utils.count_from_seqs(k, kmer_to_idx, curr_seqs)
-        return this_normalized_count
 
     #Sparse matrix generation
     def sparse_matrix_from_fasta_files(self):
@@ -101,7 +77,6 @@ class processed_data:
     '''
     def __init__(self, orig_data, corr_thresh = None, mut_thresh = None, savepath = None, rel_max_thresh = 5, seed = None):
         self.orig_data = orig_data
-        self.sparse = orig_data.sparse
         self.N_orig = self.orig_data.N
         self.k = self.orig_data.k
         self.num_hashes = self.orig_data.num_hashes
@@ -116,87 +91,18 @@ class processed_data:
             non_mut_prob = (1-mut_thresh)**self.k
             self.corr_thresh = 2*non_mut_prob            
         self.rel_max_thresh = rel_max_thresh
-        if self.sparse:
-            self.uncorr_indices = self.sparse_uncorr_idx()
-        else:
-            self.uncorr_indices = self.uncorr_idx()
+        self.dictionary, self.uncorr_indices = pd.process_dictionary(
+            self.orig_data.dictionary,
+            self.corr_thresh,
+            self.rel_max_thresh,
+        )
         self.N = len(self.uncorr_indices)
         self.idx_to_kmer = self.orig_data.idx_to_kmer
         self.kmer_to_idx = self.orig_data.kmer_to_idx
         self.fasta_files = [self.orig_data.fasta_files[i] for i in self.uncorr_indices]
-        if self.sparse:
-            self.dictionary = self.sparse_flatten_dictionary()
-        else:
-            self.dictionary = self.flatten_dictionary()
         if savepath is not None:
             with open(savepath, 'wb') as outfile:
                 pickle.dump(self, outfile, pickle.HIGHEST_PROTOCOL)
-                
-    def uncorr_idx(self):
-        orig_dict = self.orig_data.dictionary
-        norm_dict = orig_dict/np.linalg.norm(orig_dict, axis = 0)
-        corrs = np.dot(np.transpose(norm_dict),norm_dict)
-        uncorr_idx = [0]
-        for i in range(1,self.N_orig):
-            corr_flag = False
-            for j in range(0,i):
-                if corrs[i,j] > self.corr_thresh:
-                    corr_flag = True
-                    break
-            if not(corr_flag):
-                uncorr_idx.append(i)
-        return np.array(uncorr_idx).astype(int)
-
-    def sparse_uncorr_idx(self):
-        orig_dict = self.orig_data.dictionary
-        norm_dict = normalize(orig_dict, norm = 'l2', axis = 0)
-        corrs = norm_dict.transpose() * norm_dict
-        uncorr_idx = [0]
-        for i in range(1,self.N_orig):
-            corr_flag = False
-            for j in range(0,i):
-                if corrs[i,j] > self.corr_thresh:
-                    corr_flag = True
-                    break
-            if not(corr_flag):
-                uncorr_idx.append(i)
-        return np.array(uncorr_idx).astype(int)
-    
-    #reduces the peaks of dictionary columns
-    #assumes min(dict[:,i]) corresponds to count of exactly one kmer
-    def flatten_dictionary(self):
-        base_dict = self.orig_data.dictionary[:,self.uncorr_indices]
-        flat_dict = np.copy(base_dict)
-        for i in range(self.N):
-            col = base_dict[:,i]
-            m = np.min(col[col>0])
-            removed = 0
-            #todo: more scientific choice of threshold
-            for j in range(len(self.kmer_to_idx)):
-                if col[j]/m > self.rel_max_thresh:
-                    flat_dict[j,i] = self.rel_max_thresh*m
-                    removed += base_dict[j,i] - self.rel_max_thresh
-            total_i = 1/m
-            total_i_adj = 1/m - removed
-            flat_dict[:,i] = flat_dict[:,i]*total_i/total_i_adj
-        return flat_dict
-
-    def sparse_flatten_dictionary(self):
-        base_dict = self.orig_data.dictionary[:,self.uncorr_indices]
-        flat_dict = base_dict.copy()
-        for i in range(self.N):
-            col = base_dict[:,i]
-            col_plus = col[col.nonzero()]
-            m = col_plus.min()
-            removed = 0
-            for j in col.nonzero()[0]:
-                if col[j,0]/m > self.rel_max_thresh:
-                    flat_dict[j,i] = self.rel_max_thresh*m
-                    removed += base_dict[j,i] - self.rel_max_thresh
-            total_i = 1/m
-            total_i_adj = 1/m - removed
-            flat_dict[:,i] = flat_dict[:,i]*total_i/total_i_adj
-        return flat_dict
     
     def process_abund_and_mut(self, abundance_list, mut_rate_list):
         proc_abundance = [abundance_list[i] for i in self.uncorr_indices]
